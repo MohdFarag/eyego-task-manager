@@ -21,7 +21,8 @@ app.get('/', (req, res) => {
     res.send('Task Manager API is running...');
 });
 
-baseUrl = '/api/v1';
+// Base URL
+const baseUrl = process.env.BASE_URL;
 
 // Routes
 app.use(`${baseUrl}/tasks`, require('./routes/task/tasks'));
