@@ -208,7 +208,7 @@ router.put('/:task_id/incomplete', auth, async (req, res) => {
 
 
 // Delete All Tasks
-router.delete('/', auth, async (req, res) => {
+router.delete('/all', auth, async (req, res) => {
     try{
         const query = { userId: req.user._id };
         
