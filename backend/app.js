@@ -22,8 +22,10 @@ app.get('/', (req, res) => {
 });
 
 baseUrl = '/api/v1';
+
 // Routes
 app.use(`${baseUrl}/tasks`, require('./routes/task/tasks'));
-app.use(`${baseUrl}/users`, require('./routes/user/users'));
+app.use(`${baseUrl}/login`, require('./routes/user/login'));
+app.use(`${baseUrl}/signup`, require('./routes/user/signup'));
 
 module.exports = app;
