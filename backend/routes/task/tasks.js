@@ -1,24 +1,26 @@
 const express = require('express');
 const router = express.Router();
 
-const taskSchema = require('./taskSchema')
+const Task = require('./taskSchema')
 const Response = require('../../helper/response');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 
+const auth = require('../middleware/authorization');
+const jwt = require('jsonwebtoken');
+
 const { parseDateFromString } = require('../../helper/date');
 const { validTitle, validStatus, validId } = require('./validation');
-const json = require('body-parser/lib/types/json');
 
 // Get All Tasks
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
     try {
         let status = req.query.status;
         const query = validStatus(status)
-            ? { status } 
-            : {};
+            ? { status, userId: req.user._id } 
+            : { userId: req.user._id };
 
-        let tasks = await taskSchema.find(query);
+        let tasks = await Task.find(query);
 
         return res.status(200).send(Response.success({ 
             tasks: tasks,
@@ -29,7 +31,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get Task by ID
-router.get('/:task_id', async (req, res) => {
+router.get('/:task_id', auth, async (req, res) => {
     try {
         let taskId = req.params.task_id;
         if(!await validId(taskId)){
@@ -38,7 +40,13 @@ router.get('/:task_id', async (req, res) => {
             }));
         }
 
-        let task = await taskSchema.findOne({ _id: taskId });
+        let task = await Task.findOne({ _id: taskId });
+
+        if (task.userId != req.user._id) {
+            return res.status(403).send(Response.fail({
+                message: "Unauthorized access.",
+            }));
+        }
 
         return res.status(200).send(Response.success(task));            
     } catch (error) {
@@ -47,7 +55,7 @@ router.get('/:task_id', async (req, res) => {
 });
 
 // Create New Task
-router.post('/new', async (req, res) => {
+router.post('/new', auth, async (req, res) => {
     try{
         let title = req.body.title;
         if(!validTitle(title)){
@@ -66,26 +74,26 @@ router.post('/new', async (req, res) => {
             }));
         }
     
-    
-        let newTask = new taskSchema({
+        let task = new Task({
             title: title,
             details: details,
             time: time,
             status: status,
+            userId: req.user._id,
         });
     
-        newTask.save();
+        task.save();
     
         return res.status(201).send(Response.success({ 
             message: "Successfully created new task.",
         }));    
-    }catch(error){
-        return res.status(500).send(Response.error("An error occurred"));
+    } catch (error) {
+        return res.status(500).send(Response.error(error.message));
     }
 });
 
 // Update Task by ID
-router.put('/:task_id', async (req, res) => {
+router.put('/:task_id', auth, async (req, res) => {
     try{
         let taskId = req.params.task_id;
         if(!await validId(taskId)){
@@ -94,8 +102,14 @@ router.put('/:task_id', async (req, res) => {
             }));
         }
         
-        let task = await taskSchema.findOne({ _id: taskId });
-        
+        let task = await Task.findOne({ _id: taskId });
+
+        if (task.userId != req.user._id) {
+            return res.status(403).send(Response.fail({
+                message: "Unauthorized access.",
+            }));
+        }
+
         if (req.body.title) {
             if (!validTitle(req.body.title)) {
                 return res.status(400).send(Response.fail({ 
@@ -128,48 +142,13 @@ router.put('/:task_id', async (req, res) => {
         return res.status(200).send(Response.success({ 
             message: "Successfully updated a task.",
         }));
-    }catch(error){
-        return res.status(500).send(Response.error("An error occurred"));
-    }
-});
-
-// Delete All Tasks
-router.delete('/', async (req, res) => {
-    try{
-        let task = await taskSchema.deleteMany();
-        task.save();
-    
-        return res.status(200).send(Response.success({ 
-            message: "Successfully deleted all tasks.",
-        }));
-    }catch(error){
-        return res.status(500).send(Response.error("An error occurred"));
-    }
-});
-
-// Delete Task by ID
-router.delete('/:task_id', async (req, res) => {
-    try{
-        let taskId = req.params.task_id;
-        if(!await validId(taskId)){
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-        
-        let task = await taskSchema.deleteOne({ _id: taskId });
-        task.save();
-    
-        return res.status(200).send(Response.success({ 
-            message: "Successfully deleted a task.",
-        }));
-    }catch(error){
-        return res.status(500).send(Response.error("An error occurred"));
+    } catch (error) {
+        return res.status(500).send(Response.error(error.message));
     }
 });
 
 // Mark Task as Complete
-router.put('/:task_id/complete', async (req, res) => {
+router.put('/:task_id/complete', auth, async (req, res) => {
     try{
         let taskId = req.params.task_id;
         if(!await validId(taskId)){
@@ -178,7 +157,14 @@ router.put('/:task_id/complete', async (req, res) => {
             }));
         }
         
-        let task = await taskSchema.findOne({ _id: taskId });
+        let task = await Task.findOne({ _id: taskId });
+
+        if (task.userId != req.user._id) {
+            return res.status(403).send(Response.fail({
+                message: "Unauthorized access.",
+            }));
+        }
+
         task.status = 'complete';
 
         task.save();
@@ -186,13 +172,13 @@ router.put('/:task_id/complete', async (req, res) => {
         return res.status(200).send(Response.success({ 
             message: "Successfully marked task as complete.",
         }));
-    }catch(error){
-        return res.status(500).send(Response.error("An error occurred"));
+    } catch (error) {
+        return res.status(500).send(Response.error(error.message));
     }
 });
 
 // Mark Task as Incomplete
-router.put('/:task_id/incomplete', async (req, res) => {
+router.put('/:task_id/incomplete', auth, async (req, res) => {
     try{
         let taskId = req.params.task_id;
         if(!await validId(taskId)){
@@ -201,7 +187,14 @@ router.put('/:task_id/incomplete', async (req, res) => {
             }));
         }
         
-        let task = await taskSchema.findOne({ _id: taskId });
+        let task = await Task.findOne({ _id: taskId });
+
+        if (task.userId != req.user._id) {
+            return res.status(403).send(Response.fail({
+                message: "Unauthorized access.",
+            }));
+        }
+
         task.status = 'incomplete';
 
         task.save();
@@ -209,8 +202,54 @@ router.put('/:task_id/incomplete', async (req, res) => {
         return res.status(200).send(Response.success({ 
             message: "Successfully marked task as incomplete.",
         }));
-    }catch(error){
-        return res.status(500).send(Response.error("An error occurred"));
+    } catch (error) {
+        return res.status(500).send(Response.error(error.message));
+    }
+});
+
+
+// Delete All Tasks
+router.delete('/', auth, async (req, res) => {
+    try{
+        const query = { userId: req.user._id };
+        
+        let task = await Task.deleteMany(query);
+        task.save();
+    
+        return res.status(200).send(Response.success({ 
+            message: "Successfully deleted all tasks.",
+        }));
+    } catch (error) {
+        return res.status(500).send(Response.error(error.message));
+    }
+});
+
+// Delete Task by ID
+router.delete('/:task_id', auth, async (req, res) => {
+    try{
+        let taskId = req.params.task_id;
+
+        if(!await validId(taskId)){
+            return res.status(404).send(Response.fail({
+                message: "Task not found.",
+            }));
+        }
+        
+        let task = await Task.deleteOne({ _id: taskId });
+
+        if (task.userId != req.user._id) {
+            return res.status(403).send(Response.fail({
+                message: "Unauthorized access.",
+            }));
+        }
+
+        task.save();
+    
+        return res.status(200).send(Response.success({ 
+            message: "Successfully deleted a task.",
+        }));
+    } catch (error) {
+        return res.status(500).send(Response.error(error.message));
     }
 });
 

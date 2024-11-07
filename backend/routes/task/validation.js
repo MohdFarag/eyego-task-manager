@@ -1,4 +1,4 @@
-const taskSchema = require('./taskSchema')
+const Task = require('./taskSchema')
 
 function validTitle(title){
     return title != "" && title != undefined;
@@ -10,7 +10,7 @@ function validStatus(status){
 
 async function validId(taskId) {
     try {
-        await taskSchema.findOne({ _id: taskId });
+        await Task.findOne({ _id: taskId });
         return true;        
     } catch (error) {
         return false;
