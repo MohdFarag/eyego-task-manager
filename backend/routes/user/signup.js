@@ -3,7 +3,7 @@ const User = require('./userSchema');
 const express = require('express');
 const Response = require('../../helper/response');
 
-const { validUsername, validName, validEmail, validPassword } = require('./validation');
+const { validUsername, isUsernameExist, validName, validEmail, validPassword } = require('./validation');
 const { parseDateFromString } = require('../../helper/date');
 
 const router = express.Router();
@@ -16,6 +16,13 @@ router.post('/', async (req, res) => {
                 message: 'Invalid Username',
             }));
         }
+
+        if (!isUsernameExist(username)) {
+            return res.status(400).send(Response.fail({
+                message: 'Username already exists',
+            }));
+        }
+
 
         let firstName = req.body.firstName;
         if (!validName(firstName)) {
@@ -35,6 +42,12 @@ router.post('/', async (req, res) => {
         if (!validEmail(email)) {
             return res.status(400).send(Response.fail({
                 message: 'Invalid Email',
+            }));
+        }
+
+        if (!isEmailExist(email)) {
+            return res.status(400).send(Response.fail({
+                message: 'Email already exists',
             }));
         }
 
