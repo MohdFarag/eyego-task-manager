@@ -211,9 +211,7 @@ router.put('/:task_id/incomplete', auth, async (req, res) => {
 router.delete('/all', auth, async (req, res) => {
     try{
         const query = { userId: req.user._id };
-        
-        let task = await Task.deleteMany(query);
-        task.save();
+        await Task.deleteMany(query);
     
         return res.status(200).send(Response.success({ 
             message: "Successfully deleted all tasks.",
@@ -233,8 +231,14 @@ router.delete('/:task_id', auth, async (req, res) => {
                 message: "Task not found.",
             }));
         }
-        
-        let task = await Task.deleteOne({ _id: taskId });
+
+        let task = await Task.findOne({ _id: taskId });
+
+        if (!task) {
+            return res.status(404).send(Response.fail({
+                message: "Task not found.",
+            }));
+        }
 
         if (task.userId != req.user._id) {
             return res.status(403).send(Response.fail({
@@ -242,8 +246,8 @@ router.delete('/:task_id', auth, async (req, res) => {
             }));
         }
 
-        task.save();
-    
+        await task.deleteOne({ _id: taskId });
+
         return res.status(200).send(Response.success({ 
             message: "Successfully deleted a task.",
         }));
