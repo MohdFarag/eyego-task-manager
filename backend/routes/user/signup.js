@@ -7,9 +7,14 @@ const { parseDateFromString } = require('../../helper/date');
 
 const router = express.Router();
 
+// Constants
+const STATUS_BAD_REQUEST = 400;
+const STATUS_SUCCESS = 201;
+const STATUS_SERVER_ERROR = 500;
+
 // Utility function for responding with a validation error
 const respondWithValidationError = (res, message) => 
-    res.status(400).send(Response.fail({ message }));
+    res.status(STATUS_BAD_REQUEST).send(Response.fail({ message }));
 
 // Utility function to hash password
 const hashPassword = async (password) => {
@@ -72,9 +77,9 @@ router.post('/', async (req, res) => {
 
         await user.save();
 
-        return res.status(201).send(Response.success({ message: 'User Registered Successfully!' }));
+        return res.status(STATUS_SUCCESS).send(Response.success({ message: 'User Registered Successfully!' }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return res.status(STATUS_SERVER_ERROR).send(Response.error(error.message));
     }
 });
 
