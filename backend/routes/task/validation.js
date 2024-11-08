@@ -4,8 +4,9 @@ function validTitle(title){
     return title != "" && title != undefined;
 }
 
-function validStatus(status){
-    return ['complete', 'incomplete'].includes(status);
+function validStatus(status) {
+    const validStatuses = ['complete', 'incomplete'];
+    return validStatuses.includes(status);
 }
 
 async function validId(taskId) {

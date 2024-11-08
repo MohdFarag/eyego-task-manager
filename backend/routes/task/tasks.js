@@ -1,260 +1,141 @@
 const express = require('express');
 const router = express.Router();
 
-const Task = require('./taskSchema')
+const Task = require('./taskSchema');
 const Response = require('../../helper/response');
-const mongoose = require('mongoose');
-
 const auth = require('../middleware/authorization');
-const jwt = require('jsonwebtoken');
-
 const { parseDateFromString } = require('../../helper/date');
 const { validTitle, validStatus, validId } = require('./validation');
+
+// Helper function for error handling
+const handleServerError = (res, error) => res.status(500).send(Response.error(error.message));
+
+// Middleware for fetching and validating a task by ID
+const getTaskById = async (req, res, next) => {
+    const { task_id } = req.params;
+
+    if (!await validId(task_id)) {
+        return res.status(404).send(Response.fail({ message: "Task not found." }));
+    }
+
+    const task = await Task.findById(task_id);
+    if (!task) {
+        return res.status(404).send(Response.fail({ message: "Task not found." }));
+    }
+
+    if (task.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).send(Response.fail({ message: "Unauthorized access." }));
+    }
+
+    req.task = task;
+    next();
+};
 
 // Get All Tasks
 router.get('/', auth, async (req, res) => {
     try {
-        let status = req.query.status;
-        const query = validStatus(status)
-            ? { status, userId: req.user._id } 
-            : { userId: req.user._id };
+        const { status } = req.query;
+        const query = { userId: req.user._id, ...(validStatus(status) && { status }) };
 
-        let tasks = await Task.find(query);
-
-        return res.status(200).send(Response.success({ 
-            tasks: tasks,
-        }));            
+        const tasks = await Task.find(query);
+        return res.status(200).send(Response.success({ tasks }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return handleServerError(res, error);
     }
 });
 
 // Get Task by ID
-router.get('/:task_id', auth, async (req, res) => {
-    try {
-        let taskId = req.params.task_id;
-        if(!await validId(taskId)){
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-
-        let task = await Task.findOne({ _id: taskId });
-
-        if (task.userId != req.user._id) {
-            return res.status(403).send(Response.fail({
-                message: "Unauthorized access.",
-            }));
-        }
-
-        return res.status(200).send(Response.success(task));            
-    } catch (error) {
-        return res.status(500).send(Response.error(error.message));
-    }
+router.get('/:task_id', auth, getTaskById, async (req, res) => {
+    return res.status(200).send(Response.success(req.task));
 });
 
 // Create New Task
 router.post('/new', auth, async (req, res) => {
-    try{
-        let title = req.body.title;
-        if(!validTitle(title)){
-            return res.status(400).send(Response.fail({ 
-                title: "Title is required.",
-            }));
+    try {
+        const { title, details, time: timeStr, status } = req.body;
+
+        if (!validTitle(title)) {
+            return res.status(400).send(Response.fail({ title: "Title is required." }));
         }
-    
-        let details = req.body.details;
-        let time = parseDateFromString(req.body.time);
-        
-        let status = req.body.status;
-        if(!validStatus(status)){
-            return res.status(400).send(Response.fail({ 
-                title: "Status must be either 'complete' or 'incomplete'.",
-            }));
+
+        if (!validStatus(status)) {
+            return res.status(400).send(Response.fail({ title: "Status must be either 'complete' or 'incomplete'." }));
         }
-    
-        let task = new Task({
-            title: title,
-            details: details,
-            time: time,
-            status: status,
+
+        const task = new Task({
+            title,
+            details,
+            time: parseDateFromString(timeStr),
+            status,
             userId: req.user._id,
         });
-    
-        task.save();
-    
-        return res.status(201).send(Response.success({ 
-            message: "Successfully created new task.",
-        }));    
+
+        await task.save();
+        return res.status(201).send(Response.success({ message: "Successfully created new task." }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return handleServerError(res, error);
     }
 });
 
 // Update Task by ID
-router.put('/:task_id', auth, async (req, res) => {
-    try{
-        let taskId = req.params.task_id;
-        if(!await validId(taskId)){
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-        
-        let task = await Task.findOne({ _id: taskId });
+router.put('/:task_id', auth, getTaskById, async (req, res) => {
+    try {
+        const { title, details, time: timeStr, status } = req.body;
 
-        if (task.userId != req.user._id) {
-            return res.status(403).send(Response.fail({
-                message: "Unauthorized access.",
-            }));
+        if (title && !validTitle(title)) {
+            return res.status(400).send(Response.fail({ title: "Title is required." }));
         }
 
-        if (req.body.title) {
-            if (!validTitle(req.body.title)) {
-                return res.status(400).send(Response.fail({ 
-                    title: "Title is required.",
-                }));
-            }
-            task.title = req.body.title;
+        if (status && !validStatus(status)) {
+            return res.status(400).send(Response.fail({ title: "Status must be either 'complete' or 'incomplete'." }));
         }
 
-        if (req.body.details) {
-            task.details = req.body.details;
-        }
+        Object.assign(req.task, {
+            ...(title && { title }),
+            ...(details && { details }),
+            ...(timeStr && { time: parseDateFromString(timeStr) }),
+            ...(status && { status }),
+        });
 
-        if (req.body.time) {
-            task.time = parseDateFromString(req.body.time);
-        }
-        
-        if (req.body.status) {
-            if(!validStatus(req.body.status)){
-                return res.status(400).send(Response.fail({ 
-                    title: "Status must be either 'complete' or 'incomplete'.",
-                }));
-            }
-    
-            task.status = req.body.status;
-        }    
-
-        task.save();
-    
-        return res.status(200).send(Response.success({ 
-            message: "Successfully updated a task.",
-        }));
+        await req.task.save();
+        return res.status(200).send(Response.success({ message: "Successfully updated a task." }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return handleServerError(res, error);
     }
 });
 
-// Mark Task as Complete
-router.put('/:task_id/complete', auth, async (req, res) => {
-    try{
-        let taskId = req.params.task_id;
-        if(!await validId(taskId)){
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-        
-        let task = await Task.findOne({ _id: taskId });
-
-        if (task.userId != req.user._id) {
-            return res.status(403).send(Response.fail({
-                message: "Unauthorized access.",
-            }));
-        }
-
-        task.status = 'complete';
-
-        task.save();
-    
-        return res.status(200).send(Response.success({ 
-            message: "Successfully marked task as complete.",
-        }));
+// Mark Task as Complete or Incomplete
+const markTaskStatus = (status) => async (req, res) => {
+    try {
+        req.task.status = status;
+        await req.task.save();
+        return res.status(200).send(Response.success({ message: `Successfully marked task as ${status}.` }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return handleServerError(res, error);
     }
-});
+};
 
-// Mark Task as Incomplete
-router.put('/:task_id/incomplete', auth, async (req, res) => {
-    try{
-        let taskId = req.params.task_id;
-        if(!await validId(taskId)){
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-        
-        let task = await Task.findOne({ _id: taskId });
-
-        if (task.userId != req.user._id) {
-            return res.status(403).send(Response.fail({
-                message: "Unauthorized access.",
-            }));
-        }
-
-        task.status = 'incomplete';
-
-        task.save();
-    
-        return res.status(200).send(Response.success({ 
-            message: "Successfully marked task as incomplete.",
-        }));
-    } catch (error) {
-        return res.status(500).send(Response.error(error.message));
-    }
-});
-
+router.put('/:task_id/complete', auth, getTaskById, markTaskStatus('complete'));
+router.put('/:task_id/incomplete', auth, getTaskById, markTaskStatus('incomplete'));
 
 // Delete All Tasks
 router.delete('/all', auth, async (req, res) => {
-    try{
-        const query = { userId: req.user._id };
-        await Task.deleteMany(query);
-    
-        return res.status(200).send(Response.success({ 
-            message: "Successfully deleted all tasks.",
-        }));
+    try {
+        await Task.deleteMany({ userId: req.user._id });
+        return res.status(200).send(Response.success({ message: "Successfully deleted all tasks." }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return handleServerError(res, error);
     }
 });
 
 // Delete Task by ID
-router.delete('/:task_id', auth, async (req, res) => {
-    try{
-        let taskId = req.params.task_id;
-
-        if(!await validId(taskId)){
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-
-        let task = await Task.findOne({ _id: taskId });
-
-        if (!task) {
-            return res.status(404).send(Response.fail({
-                message: "Task not found.",
-            }));
-        }
-
-        if (task.userId != req.user._id) {
-            return res.status(403).send(Response.fail({
-                message: "Unauthorized access.",
-            }));
-        }
-
-        await task.deleteOne({ _id: taskId });
-
-        return res.status(200).send(Response.success({ 
-            message: "Successfully deleted a task.",
-        }));
+router.delete('/:task_id', auth, getTaskById, async (req, res) => {
+    try {
+        await req.task.deleteOne();
+        return res.status(200).send(Response.success({ message: "Successfully deleted a task." }));
     } catch (error) {
-        return res.status(500).send(Response.error(error.message));
+        return handleServerError(res, error);
     }
 });
 
-// Export the router
 module.exports = router;
