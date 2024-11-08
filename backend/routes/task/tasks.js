@@ -13,24 +13,34 @@ const STATUS_NOT_FOUND = 404;
 const STATUS_SUCCESS = 200;
 const STATUS_SERVER_ERROR = 500;
 
-// Helper function for error handling
+const MESSAGES = {
+    TASK_NOT_FOUND: 'Task not found.',
+    UNAUTHARIZED_ACCESS: 'Unauthorized access.',
+    REQUIRED_TITLE: 'Title is required.',
+    INVALID_STATUS: "Status must be either 'complete' or 'incomplete'.",
+    TASK_CREATED: 'Successfully created new task.',
+    TASK_UPDATED: 'Successfully updated a task.',
+    TASK_MARKED: 'Successfully marked task as ',
+    TASK_DELETED: 'Successfully deleted a task.',
+    TASKS_DELETED: 'Successfully deleted all tasks.',
+};
+
 const handleServerError = (res, error) => res.status(STATUS_SERVER_ERROR).send(Response.error(error.message));
 
-// Middleware for fetching and validating a task by ID
 const getTaskById = async (req, res, next) => {
     const { task_id } = req.params;
 
     if (!await validId(task_id)) {
-        return res.status(STATUS_NOT_FOUND).send(Response.fail({ message: "Task not found." }));
+        return res.status(STATUS_NOT_FOUND).send(Response.fail({ message: MESSAGES.TASK_NOT_FOUND }));
     }
 
     const task = await Task.findById(task_id);
     if (!task) {
-        return res.status(STATUS_NOT_FOUND).send(Response.fail({ message: "Task not found." }));
+        return res.status(STATUS_NOT_FOUND).send(Response.fail({ message: MESSAGES.TASK_NOT_FOUND }));
     }
 
     if (task.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).send(Response.fail({ message: "Unauthorized access." }));
+        return res.status(403).send(Response.fail({ message: MESSAGES.UNAUTHARIZED_ACCESS }));
     }
 
     req.task = task;
@@ -61,11 +71,11 @@ router.post('/new', auth, async (req, res) => {
         const { title, details, time: timeStr, status } = req.body;
 
         if (!validTitle(title)) {
-            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: "Title is required." }));
+            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: MESSAGES.REQUIRED_TITLE }));
         }
 
         if (!validStatus(status)) {
-            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: "Status must be either 'complete' or 'incomplete'." }));
+            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: MESSAGES.INVALID_STATUS }));
         }
 
         const task = new Task({
@@ -77,7 +87,7 @@ router.post('/new', auth, async (req, res) => {
         });
 
         await task.save();
-        return res.status(201).send(Response.success({ message: "Successfully created new task." }));
+        return res.status(201).send(Response.success({ message: MESSAGES.TASK_CREATED }));
     } catch (error) {
         return handleServerError(res, error);
     }
@@ -88,12 +98,12 @@ router.put('/:task_id', auth, getTaskById, async (req, res) => {
     try {
         const { title, details, time: timeStr, status } = req.body;
 
-        if (title && !validTitle(title)) {
-            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: "Title is required." }));
+        if (!validTitle(title)) {
+            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: MESSAGES.REQUIRED_TITLE }));
         }
 
-        if (status && !validStatus(status)) {
-            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: "Status must be either 'complete' or 'incomplete'." }));
+        if (!validStatus(status)) {
+            return res.status(STATUS_BAD_REQUEST).send(Response.fail({ title: MESSAGES.INVALID_STATUS }));
         }
 
         Object.assign(req.task, {
@@ -104,7 +114,7 @@ router.put('/:task_id', auth, getTaskById, async (req, res) => {
         });
 
         await req.task.save();
-        return res.status(STATUS_SUCCESS).send(Response.success({ message: "Successfully updated a task." }));
+        return res.status(STATUS_SUCCESS).send(Response.success({ message: MESSAGES.TASK_UPDATED }));
     } catch (error) {
         return handleServerError(res, error);
     }
@@ -115,7 +125,7 @@ const markTaskStatus = (status) => async (req, res) => {
     try {
         req.task.status = status;
         await req.task.save();
-        return res.status(STATUS_SUCCESS).send(Response.success({ message: `Successfully marked task as ${status}.` }));
+        return res.status(STATUS_SUCCESS).send(Response.success({ message: `${MESSAGES.TASK_MARKED} ${status}.` }));
     } catch (error) {
         return handleServerError(res, error);
     }
@@ -128,7 +138,7 @@ router.put('/:task_id/incomplete', auth, getTaskById, markTaskStatus('incomplete
 router.delete('/all', auth, async (req, res) => {
     try {
         await Task.deleteMany({ userId: req.user._id });
-        return res.status(STATUS_SUCCESS).send(Response.success({ message: "Successfully deleted all tasks." }));
+        return res.status(STATUS_SUCCESS).send(Response.success({ message: MESSAGES.TASKS_DELETED }));
     } catch (error) {
         return handleServerError(res, error);
     }
@@ -138,7 +148,7 @@ router.delete('/all', auth, async (req, res) => {
 router.delete('/:task_id', auth, getTaskById, async (req, res) => {
     try {
         await req.task.deleteOne();
-        return res.status(STATUS_SUCCESS).send(Response.success({ message: "Successfully deleted a task." }));
+        return res.status(STATUS_SUCCESS).send(Response.success({ message: MESSAGES.TASK_DELETED }));
     } catch (error) {
         return handleServerError(res, error);
     }
