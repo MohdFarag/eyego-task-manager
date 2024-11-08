@@ -87,7 +87,7 @@ router.post('/new', auth, async (req, res) => {
         });
 
         await task.save();
-        return res.status(201).send(Response.success({ message: MESSAGES.TASK_CREATED }));
+        return res.status(201).send(Response.success({ message: MESSAGES.TASK_CREATED, _id: task._id }));
     } catch (error) {
         return handleServerError(res, error);
     }
