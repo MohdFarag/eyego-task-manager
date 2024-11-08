@@ -89,6 +89,8 @@ The project organized into the following directories:
   - **helper/** - Contains helper functions & classes for endpoints
   - **routes/** - Includes routes endpoints implementation for the application.
     - **middleware/** - Includes middleware for authentication and validation.
+    - **taks/** - Includes routes for task management.
+    - **user/** - Includes routes for user authentication.
 
 [Back To The Top](#task-manager-application)
 
